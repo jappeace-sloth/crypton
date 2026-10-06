@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+`Crypto.PubKey.MLKEM` and `Crypto.PubKey.MLDSA`: ML-KEM and ML-DSA, the
+post-quantum key encapsulation and signature schemes of FIPS 203 and FIPS
+204, through mlkem-native and mldsa-native.  The new `Crypto.KEM` holds a
+`KEM` class and `SharedSecret`, which moves there from `Crypto.ECC` (still
+exported from it) and gains a `Show` instance that prints no secret.
+
+Existing code keeps compiling with two exceptions:
+`CryptoError_PublicKeyStructureInvalid` is appended to `CryptoError`, which a
+match without a wildcard will warn about, and an orphan `Show SharedSecret`
+instance of your own now clashes with the new one.
+
 * chore: stop hiding foldl' from Prelude
   [#294](https://github.com/kazu-yamamoto/crypton/pull/294)
 * chore: ask for hidden visibility only where the format has it
@@ -23,9 +34,11 @@ into one of these.
 
 ## 2.1.6
 
-The `license:` field now says what the tree holds -- `BSD-3-Clause AND MIT
-AND ISC` -- and `license-files:` lists all five texts.  **Nothing is required
-of a user that was not required before**; the field was simply incomplete.
+A PBKDF2 output length of zero no longer aborts the process, and
+`Crypto.PubKey.ECC.P256.scalarInv` no longer loops forever on zero.  The
+`license:` field now says what the tree holds, `BSD-3-Clause AND MIT AND
+ISC`, and `license-files:` lists all five texts.  **Nothing is required of a
+user that was not required before**; the field was simply incomplete.
 
 * Carry the MIT notice for the parts that follow fusion, and say what the tree holds
   [#267](https://github.com/kazu-yamamoto/crypton/pull/267)
@@ -40,8 +53,8 @@ of a user that was not required before**; the field was simply incomplete.
 
 ## 2.1.5
 
-2.1.3 and 2.1.4 cannot be built with GCC 14 or newer.  This release is
-that fix.
+2.1.3 and 2.1.4 cannot be built with GCC 14 or newer.  This release is that
+fix.  AES-GCM is also about a quarter faster on AArch64.
 
 * Watch for a primitive fallen off its fast path
   [#277](https://github.com/kazu-yamamoto/crypton/pull/277)
@@ -61,7 +74,10 @@ that fix.
 ## 2.1.4
 
 2.1.3 could not be built from Hackage in the default configuration, and is
-deprecated there.  This release is that fix.
+deprecated there.  This release is that fix, and two more: the C builds with
+gcc before 13 on AArch64 again, and SHA-256 on AArch64 is back to the speed
+of 2.1.2, which 2.1.3 had cut to a fifth.  It is deprecated on Hackage in
+turn, as it does not build with GCC 14 or newer; use 2.1.5 or later.
 
 * Add p256 header files to cabal extra-source-files
   [#271](https://github.com/kazu-yamamoto/crypton/pull/271)
@@ -73,6 +89,23 @@ deprecated there.  This release is that fix.
   [#276](https://github.com/kazu-yamamoto/crypton/pull/276)
 
 ## 2.1.3
+
+Deprecated on Hackage, as its tarball does not build; use 2.1.5 or later.  A
+hardening release.  One-call AES-GCM and ChaCha20-Poly1305 decryption accepted
+a tag of no bytes, which skipped authentication; a tag must now be 4 to 16
+bytes for AES-GCM and exactly 16 for ChaCha20-Poly1305, so a truncated
+ChaCha20-Poly1305 tag is refused.  `Crypto.Cipher.AES.GCM` refuses an empty
+nonce, which gave the authentication key away.  A message of 4 GiB or more was
+silently truncated on its way to the C; the streaming ciphers now process all
+of it and the one-call AEADs and AES modes refuse it.  The arithmetic used
+without GMP no longer overruns a buffer, two threads setting up AES keys no
+longer race, and the three cabal flag settings that were broken work again.
+
+RSA on AArch64, Ed25519 signing and key generation, and P-256 ECDSA
+verification are faster, and AES-GCM uses 512-bit VAES where x86-64 has it.
+The C now runs under the sanitizers and a constant-time check in CI, on
+32-bit and big-endian machines too, and key material is wiped where the
+compiler cannot skip it.
 
 * fix(aead): reject missing and oversized authentication tags
   [#233](https://github.com/kazu-yamamoto/crypton/pull/233)
@@ -145,6 +178,11 @@ deprecated there.  This release is that fix.
 
 ## 2.1.2
 
+Faster only; no API change.  P-256, P-384, P-521, X25519 and, on x86-64, RSA
+go through AWS's s2n-bignum, hand-written assembly carrying machine-checked
+proofs, which makes them up to nine times faster depending on the curve and
+the operation.  AES-GCM uses the wide VAES instructions where x86-64 has them.
+
 * perf(p256): 255 squarings for the field inversion, not 287
   [#223](https://github.com/kazu-yamamoto/crypton/pull/223)
 * perf(p256): ECDH through s2n-bignum, 2.7x
@@ -166,6 +204,11 @@ deprecated there.  This release is that fix.
 
 ## 2.1.1
 
+New functions only; existing code is unaffected.  `Crypto.PubKey.ECDSA` gains
+RFC 6979 deterministic nonces, `Crypto.Cipher.ChaCha.Poly1305` does a whole
+ChaCha20-Poly1305 message in one call, and `Crypto.Cipher.AES.GCM` gains
+`decryptWithTag` for protocols that carry the tag apart from the ciphertext.
+
 * feat(ecdsa): RFC 6979 deterministic nonces for Crypto.PubKey.ECDSA
   [#219](https://github.com/kazu-yamamoto/crypton/pull/219)
 * feat(gcm): a decrypt that hands back the tag instead of comparing it
@@ -177,6 +220,26 @@ deprecated there.  This release is that fix.
 
 ## 2.1.0
 
+AES-GCM is several times faster on short messages, the packet sizes QUIC and
+TLS send, on x86-64 and AArch64.  New are `Crypto.Cipher.AES.GCM` for many
+messages under one key, `encryptWithMask` for QUIC header protection, and
+Skein with the digest size as a type parameter.  The Broadwell crash fixed in
+2.0.1 is fixed here too.
+
+One change breaks callers: `Crypto.Cipher.ChaChaPoly1305.initialize` and
+`initializeX` take a checked `Key`, built with `key`, and return a `State`
+rather than a `CryptoFailable State`.
+
+* feat(hash): Skein with the digest size as a type parameter
+  [#197](https://github.com/kazu-yamamoto/crypton/pull/197)
+* fix(chachapoly1305): take a checked key, so that initializing cannot fail
+  [#198](https://github.com/kazu-yamamoto/crypton/pull/198)
+* feat(aes): Crypto.Cipher.AES.GCM, for many short messages under one key
+  [#199](https://github.com/kazu-yamamoto/crypton/pull/199)
+* build: say which platforms the fallback AES sources are for
+  [#200](https://github.com/kazu-yamamoto/crypton/pull/200)
+* feat(aes): encryptWithMask, for the QUIC header protection mask
+  [#201](https://github.com/kazu-yamamoto/crypton/pull/201)
 * fix(cpu): stop reading Intel's SDBG bit as AMD's XOP
   [#204](https://github.com/kazu-yamamoto/crypton/pull/204)
 * fix(bench): build the benchmark against the checked ChaCha20-Poly1305 key
@@ -210,35 +273,40 @@ deprecated there.  This release is that fix.
 
 ## 2.0.1
 
-* feat(hash): Skein with the digest size as a type parameter
-  [#197](https://github.com/kazu-yamamoto/crypton/pull/197)
-* fix(chachapoly1305): take a checked key, so that initializing cannot fail
-  [#198](https://github.com/kazu-yamamoto/crypton/pull/198)
-* feat(aes): Crypto.Cipher.AES.GCM, for many short messages under one key
-  [#199](https://github.com/kazu-yamamoto/crypton/pull/199)
-* build: say which platforms the fallback AES sources are for
-  [#200](https://github.com/kazu-yamamoto/crypton/pull/200)
-* feat(aes): encryptWithMask, for the QUIC header protection mask
-  [#201](https://github.com/kazu-yamamoto/crypton/pull/201)
+A maintenance release from the 2.0 branch with one fix: SHA-512 and ChaCha20
+crashed on Intel processors from Broadwell on.
+
 * fix(cpu): stop reading Intel's SDBG bit as AMD's XOP
   [#203](https://github.com/kazu-yamamoto/crypton/pull/203)
 
 ## 2.0.0
 
-**Breaking changes.**  Input that used to be accepted is now refused: a value
-at or above an RSA or Rabin modulus, a signature of the wrong length or out of
-range, a digest too short for HOTP's dynamic truncation, a non-canonical
-Ed25519 signature, a PKCS#7 block size outside 1..255, and block cipher input
-that is not a whole number of blocks.  A refused KDF, Argon2 or bcrypt
-parameter is reported as a `CryptoError` rather than raised as an `ErrorCall`,
-and `CryptoError_ParameterInvalid` is appended to `CryptoError`;
-`tryGetShared` is added beside `getShared`.  No exported function changed its
-signature.
+A large release, faster and harder to attack.  AES, GHASH, SHA-1, SHA-2,
+SHA-3, ChaCha20 and Poly1305 use the processor's instructions on x86-64 and
+AArch64, several through the CRYPTOGAMS assembly OpenSSL uses; DES, Camellia,
+Twofish and Blowfish run in C rather than Haskell; and point multiplication on
+every prime curve runs in C.  RSA, DSA, ECDSA and the OTP checks no longer let
+a secret decide how long they take, `expSafe` hides its exponent again, and
+showing a private key no longer prints it (`Crypto.Debug` prints one on
+purpose).  `Crypto.PubKey.ElGamal` is exposed.
 
-**Deprecated.**  The eighteen curves over a binary field in
-`Crypto.ECC.Simple.Types`.  They are obsolete, they are the curves whose
-cofactor is not 1, and they will go in a later major version.  Prefer a prime
-curve, or X25519.
+Upgrading can break code in three ways.  Input that used to be accepted is now
+refused: a value at or above an RSA or Rabin modulus, a signature of the wrong
+length or out of range, a digest too short for HOTP's dynamic truncation, a
+non-canonical Ed25519 signature, a DH or ECDH peer value that fails
+validation, an ECC public point outside the prime-order subgroup, a PKCS#7
+block size outside 1..255, and block cipher input that is not a whole number
+of blocks.  A refused KDF, Argon2 or bcrypt parameter, and a peer value
+`getShared` refuses, is reported as a `CryptoError` rather than an
+`ErrorCall`; `CryptoError_ParameterInvalid` and
+`CryptoError_PointSubgroupInvalid` are appended to `CryptoError`, and
+`tryGetShared` is added beside `getShared`.  `Crypto.MAC.Poly1305.initialize`
+and `auth` take a checked `Key`, built with `key`, so `initialize` can no
+longer fail.
+
+The eighteen curves over a binary field in `Crypto.ECC.Simple.Types` are
+deprecated.  They are obsolete, they are the curves whose cofactor is not 1,
+and they will go in a later major version.  Prefer a prime curve, or X25519.
 
 * Add GHC 9.14 to CI
   [#74](https://github.com/kazu-yamamoto/crypton/pull/74)
