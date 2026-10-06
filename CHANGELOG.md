@@ -291,7 +291,8 @@ validation, an ECC public point outside the prime-order subgroup, a PKCS#7
 block size outside 1..255, and block cipher input that is not a whole number
 of blocks.  A refused KDF, Argon2 or bcrypt parameter, and a peer value
 `getShared` refuses, is reported as a `CryptoError` rather than an
-`ErrorCall`; `CryptoError_ParameterInvalid` is appended to `CryptoError`, and
+`ErrorCall`; `CryptoError_ParameterInvalid` and
+`CryptoError_PointSubgroupInvalid` are appended to `CryptoError`, and
 `tryGetShared` is added beside `getShared`.  `Crypto.MAC.Poly1305.initialize`
 and `auth` take a checked `Key`, built with `key`, so `initialize` can no
 longer fail.
