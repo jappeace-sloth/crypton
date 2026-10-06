@@ -4,7 +4,14 @@
 
 `Crypto.PubKey.MLKEM` and `Crypto.PubKey.MLDSA`: ML-KEM and ML-DSA, the
 post-quantum key encapsulation and signature schemes of FIPS 203 and FIPS
-204, through mlkem-native and mldsa-native.
+204, through mlkem-native and mldsa-native.  The new `Crypto.KEM` holds a
+`KEM` class and `SharedSecret`, which moves there from `Crypto.ECC` (still
+exported from it) and gains a `Show` instance that prints no secret.
+
+Existing code keeps compiling with two exceptions:
+`CryptoError_PublicKeyStructureInvalid` is appended to `CryptoError`, which a
+match without a wildcard will warn about, and an orphan `Show SharedSecret`
+instance of your own now clashes with the new one.
 
 * chore: stop hiding foldl' from Prelude
   [#294](https://github.com/kazu-yamamoto/crypton/pull/294)
